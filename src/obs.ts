@@ -203,16 +203,34 @@ async function getContainingSource(obs: OBSWebSocket): Promise<{
   typeId: string,
   type: string,
 }> {
+  const pageUrl = window.location.href;
   const { sources } = await obs.send('GetSourcesList');
   for (const source of sources) {
     if (source.typeId === 'browser_source') {
       const props = await obs.send('GetSourceSettings', { sourceName: source.name });
-      const settings = props.sourceSettings as Record<string, string>;
-      if (!settings['is_local_file'] && window.location.href === settings['url']) {
-        return source;
+      const settings = props.sourceSettings as Record<string, string|undefined>;
+      const isLocalFile = settings['is_local_file'];
+      const settingsUrl = settings['url'];
+      const settingsFile = settings['local_file'];
+      if (!isLocalFile && settingsUrl) {
+        // OBS will accept url-encoded characters, so `  `, ` %20`, and `%20%20`
+        // will all end up being presented to the browser as `%20%20`.
+        // Therefore, there's no way to tell exactly what the settings URL was
+        // based on the page URL.
+        // OBS will also accept protocol-less URLs.
+        if (decodeURI(pageUrl).endsWith(decodeURI(settingsUrl))) {
+          return source;
+        }
       }
-      if (settings['is_local_file'] && window.location.href.includes(settings['local_file'])) {
-        return source;
+      if (isLocalFile && settingsFile) {
+        // OBS uses the format http://absolute/${path}, though I don't want to
+        // depend on that. Also, OBS supports relative paths but the leading `.`
+        // isn't included in the URL. The way the file path is encoded doesn't
+        // seem to match encodeURI or encodeURIComponent, so just decode the
+        // page URL instead.
+        if (decodeURIComponent(pageUrl).endsWith(settingsFile.replace(/^\.+/, ''))) {
+          return source;
+        }
       }
     }
   }

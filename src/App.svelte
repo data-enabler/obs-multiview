@@ -1,118 +1,31 @@
 <script lang="ts">
-  import debounce from 'lodash.debounce';
-  import { getObs } from './obs';
-  import { snapToGrid, withinEpsilon, type Transform } from './transform';
+  import Login from './Login.svelte';
+  import Multiview from './Multiview.svelte';
+  import { login, type Obs } from './obs';
 
-  interface SceneItem {
-    name: string;
-    transform: Transform;
-    visible: boolean;
-    update: (transform: Transform) => Promise<void> | undefined;
-  };
-
-  let sceneItems: Record<number, SceneItem> = $state({});
   const urlParams = new URLSearchParams(window.location.search);
-  const gridnum = +(urlParams.get('grid') || 4);
+  const urlAddress = urlParams.get('address') ?? localStorage.getItem('multiview-address');
+  const urlPassword = urlParams.get('password') ?? localStorage.getItem('multiview-password');
+  const shouldAutoConnect = urlAddress != null && urlPassword != null;
 
-  const {
-    canvas,
-    onTransformChanged,
-    setTransform,
-    onVisibilityChanged,
-    onSourceRenamed,
-    onSceneItemRemoved,
-  } = await getObs();
+  let address: string = $state(urlAddress ?? '');
+  let password: string = $state(urlPassword ?? '');
+  let connecting: boolean = $state(false);
+  let obs: Obs | null = $state(null);
+  let error: string | null = $state(null);
 
-  onVisibilityChanged(({ itemId, sourceName }, visible) => {
-    if (sceneItems[itemId]) {
-      console.log(`Source ${sourceName} ${visible ? 'visible' : 'hidden'}`);
-      sceneItems[itemId].name = sourceName;
-      sceneItems[itemId].visible = visible;
-    }
-  });
-
-  onSourceRenamed((oldName, newName) => {
-    console.log(`Source renamed from ${oldName} to ${newName}`);
-    for (const item of Object.values(sceneItems)) {
-      if (item.name === oldName) {
-        item.name = newName;
-      }
-    }
-  });
-
-  onSceneItemRemoved(({ itemId, sourceName }) => {
-    console.log(`Scene item ${sourceName} removed`);
-    delete sceneItems[itemId];
-  });
-
-  onTransformChanged(({ sceneName, itemId, sourceName }, transform, visible) => {
-    if (sceneItems[itemId]) {
-      sceneItems[itemId].name = sourceName;
-      sceneItems[itemId].visible = visible;
-      sceneItems[itemId].transform = transform;
-      sceneItems[itemId].update(transform);
-    } else {
-      sceneItems[itemId] = {
-        name: sourceName,
-        visible,
-        transform,
-        update: debounce(async (newTransform: Transform) => {
-          const rounded = snapToGrid(canvas, { width: gridnum, height: gridnum }, newTransform);
-          console.log('Original transform', newTransform);
-          console.log('Rounded transform', rounded);
-          if (withinEpsilon(rounded.positionX, newTransform.positionX) &&
-              withinEpsilon(rounded.positionY, newTransform.positionY) &&
-              withinEpsilon(rounded.width, newTransform.width) &&
-              withinEpsilon(rounded.height, newTransform.height)) {
-            return;
-          }
-          await setTransform(sceneName, itemId, rounded);
-        }, 1000),
-      };
+  $effect(() => {
+    if (shouldAutoConnect) {
+      connecting = true;
+      login(urlAddress, urlPassword)
+        .then(result => [obs, error] = result)
+        .finally(() => connecting = false);
     }
   });
 </script>
 
-<main>
-  {#each Object.entries(sceneItems) as [_, item]}
-    {#if item.visible}
-      <div class="scene-item"
-        style:left="{item.transform.positionX}px"
-        style:top="{item.transform.positionY}px"
-        style:width="{item.transform.width}px"
-        style:height="{item.transform.height}px"
-      >
-        {#if !item.name.endsWith('nolabel')}
-          <span class="name">{item.name}</span>
-        {/if}
-      </div>
-    {/if}
-  {/each}
-</main>
-
-<style>
-  .scene-item {
-    position: absolute;
-    box-sizing: border-box;
-
-    border: 2px solid #ccc;
-  }
-
-  .name {
-    position: absolute;
-    bottom: 1em;
-    left: 50%;
-    max-width: 100%;
-    box-sizing: border-box;
-
-    padding: 0.1em 0.5em;
-    white-space: nowrap;
-    overflow-x: hidden;
-    text-overflow: ellipsis;
-
-    background: rgb(0 0 0 / 50%);
-    color: rgb(255 255 255 / 75%);
-    font-weight: bold;
-    transform: translate(-50%, 50%);
-  }
-</style>
+{#if obs}
+  <Multiview {obs} />
+{:else if !connecting}
+  <Login bind:address bind:password bind:obs bind:error />
+{/if}

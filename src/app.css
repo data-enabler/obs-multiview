@@ -1,4 +1,13 @@
 :root {
   font-family: sans-serif;
   font-size: calc(32/1080 * 100vmin);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+}
+
+button, input {
+  font-size: 0.8em;
 }

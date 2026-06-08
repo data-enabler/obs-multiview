@@ -18,12 +18,35 @@ export interface ItemInfo {
   itemId: number;
   sourceName: string;
 }
+type ConnectionResult = [Obs | null, string | null];
 
-export async function getObs(): Promise<Obs> {
-  const obs = new OBSWebSocket();
-  await obs.connect({ address: 'localhost:4444' });
-  console.log('Connected to OBS WebSocket');
+export async function login(
+  address: string,
+  password: string,
+): Promise<ConnectionResult> {
+  const ws = new OBSWebSocket();
+  const connectionOptions = {
+    address,
+    password: password || undefined,
+  };
+  return await ws.connect(connectionOptions)
+    .then(async(): Promise<ConnectionResult> => {
+      console.log('Connected to OBS WebSocket');
+      localStorage.setItem('multiview-address', address);
+      localStorage.setItem('multiview-password', password);
+      ws.on('ConnectionClosed', async () => {
+        await delay(1000);
+        await ws.connect(connectionOptions);
+      });
+      const obs = await getObs(ws);
+      return [obs, null];
+    })
+    .catch(err => {
+      return [null, (err as Error).message];
+    });
+}
 
+export async function getObs(obs: OBSWebSocket): Promise<Obs> {
   const { sceneName, source } = await getContainingScene(obs);
   const { baseWidth, baseHeight } = await obs.send('GetVideoInfo');
 
@@ -235,4 +258,8 @@ async function getContainingSource(obs: OBSWebSocket): Promise<{
     }
   }
   throw new Error('Could not find browser source');
+}
+
+async function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

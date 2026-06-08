@@ -7,8 +7,9 @@ export interface Obs {
     height: number;
   };
   setTransform(sceneName: string, itemId: number, transform: Transform): Promise<void>;
-  onTransformChanged(callback: (itemInfo: ItemInfo, transform: Transform, visible: boolean) => void): void;
+  onTransformChanged(callback: (itemInfo: ItemInfo, transform: Transform, visible: boolean, locked: boolean) => void): void;
   onVisibilityChanged(callback: (item: ItemInfo, visible: boolean) => void): void;
+  onLockChanged(callback: (item: ItemInfo, locked: boolean) => void): void;
   onSourceRenamed(callback: (oldname: string, newName: string) => void): void;
   onSceneItemRemoved(callback: (item: ItemInfo) => void): void;
 }
@@ -63,6 +64,19 @@ export async function getObs(obs: OBSWebSocket): Promise<Obs> {
     });
   };
 
+  async function onLockChanged(callback: (item: ItemInfo, locked: boolean) => void) {
+    obs.on('SceneItemLockChanged', (event) => {
+      if (event['scene-name'] !== sceneName) {
+        return;
+      }
+      callback({
+        sceneName: event['scene-name'],
+        itemId: event['item-id'],
+        sourceName: event['item-name'],
+      }, event['item-locked']);
+    });
+  };
+
   async function onSourceRenamed(callback: (oldname: string, newName: string) => void) {
     obs.on('SourceRenamed', (event) => {
       callback(event.previousName, event.newName);
@@ -82,7 +96,9 @@ export async function getObs(obs: OBSWebSocket): Promise<Obs> {
     });
   }
 
-  async function onTransformChanged(callback: (item: ItemInfo, transform: Transform, visible: boolean) => void) {
+  async function onTransformChanged(
+    callback: (item: ItemInfo, transform: Transform, visible: boolean, locked: boolean) => void,
+  ) {
     const data = await obs.send('GetSceneItemList', { sceneName });
     for (const item of data.sceneItems) {
       // Ignore multiview overlay source
@@ -117,7 +133,7 @@ export async function getObs(obs: OBSWebSocket): Promise<Obs> {
         usingBounds,
         crop: props.crop,
       };
-      callback(itemInfo, transform, props.visible);
+      callback(itemInfo, transform, props.visible, props.locked);
     }
 
     obs.on('SceneItemTransformChanged', (event) => {
@@ -154,7 +170,7 @@ export async function getObs(obs: OBSWebSocket): Promise<Obs> {
         crop,
       }
       console.log('Transform changed', event.transform);
-      callback(itemInfo, transform, event.transform.visible);
+      callback(itemInfo, transform, event.transform.visible, event.transform.locked);
     });
   }
 
@@ -190,6 +206,7 @@ export async function getObs(obs: OBSWebSocket): Promise<Obs> {
     setTransform,
     onTransformChanged,
     onVisibilityChanged,
+    onLockChanged,
     onSourceRenamed,
     onSceneItemRemoved,
   }

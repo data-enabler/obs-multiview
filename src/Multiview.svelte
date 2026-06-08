@@ -13,6 +13,7 @@
     name: string;
     transform: Transform;
     visible: boolean;
+    locked: boolean;
     update: (transform: Transform) => Promise<void> | undefined;
   };
 
@@ -25,6 +26,7 @@
     onTransformChanged,
     setTransform,
     onVisibilityChanged,
+    onLockChanged,
     onSourceRenamed,
     onSceneItemRemoved,
   } = obs;
@@ -34,6 +36,14 @@
       console.log(`Source ${sourceName} ${visible ? 'visible' : 'hidden'}`);
       sceneItems[itemId].name = sourceName;
       sceneItems[itemId].visible = visible;
+    }
+  });
+
+  onLockChanged(({ itemId, sourceName }, locked) => {
+    if (sceneItems[itemId]) {
+      console.log(`Source ${sourceName} ${locked ? 'locked' : 'unlocked'}`);
+      sceneItems[itemId].name = sourceName;
+      sceneItems[itemId].locked = locked;
     }
   });
 
@@ -51,16 +61,20 @@
     delete sceneItems[itemId];
   });
 
-  onTransformChanged(({ sceneName, itemId, sourceName }, transform, visible) => {
+  onTransformChanged(({ sceneName, itemId, sourceName }, transform, visible, locked) => {
     if (sceneItems[itemId]) {
       sceneItems[itemId].name = sourceName;
       sceneItems[itemId].visible = visible;
+      sceneItems[itemId].locked = locked;
       sceneItems[itemId].transform = transform;
-      sceneItems[itemId].update(transform);
+      if (!locked) {
+        sceneItems[itemId].update(transform);
+      }
     } else {
       sceneItems[itemId] = {
         name: sourceName,
         visible,
+        locked,
         transform,
         update: debounce(async (newTransform: Transform) => {
           const rounded = snapToGrid(canvas, { width: gridnum, height: gridnum }, newTransform);
@@ -81,7 +95,7 @@
 
 <main>
   {#each Object.entries(sceneItems) as [_, item]}
-    {#if item.visible}
+    {#if item.visible && !item.locked}
       <div class="scene-item"
         style:left="{item.transform.positionX}px"
         style:top="{item.transform.positionY}px"

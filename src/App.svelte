@@ -3,6 +3,7 @@
   import Multiview from './Multiview.svelte';
   import { login, type Obs } from './obs';
 
+  const MAX_AUTO_LOGIN_ATTEMPTS = 4;
   const urlParams = new URLSearchParams(window.location.search);
   const urlAddress = urlParams.get('address') ?? localStorage.getItem('multiview-address');
   const urlPassword = urlParams.get('password') ?? localStorage.getItem('multiview-password');
@@ -17,9 +18,18 @@
   $effect(() => {
     if (shouldAutoConnect) {
       connecting = true;
-      login(urlAddress, urlPassword)
-        .then(result => [obs, error] = result)
-        .finally(() => connecting = false);
+      (async () => {
+        for (let attempts = 0; attempts < MAX_AUTO_LOGIN_ATTEMPTS; attempts++) {
+          await login(urlAddress, urlPassword)
+            .then(result => [obs, error] = result);
+          if (obs) {
+            break;
+          }
+          console.warn(`Auto-login attempt ${attempts + 1} failed: "${error}"${ attempts < MAX_AUTO_LOGIN_ATTEMPTS-1 ? ', retrying...' : ''}`);
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        connecting = false;
+      })();
     }
   });
 </script>

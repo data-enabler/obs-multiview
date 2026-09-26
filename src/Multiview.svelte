@@ -95,7 +95,7 @@
 
 <main>
   {#each Object.entries(sceneItems) as [_, item]}
-    {#if item.visible && !item.locked}
+    {#if item.visible && !item.locked && item.transform.width > 0 && item.transform.height > 0}
       <div class="scene-item"
         style:left="{item.transform.positionX}px"
         style:top="{item.transform.positionY}px"

@@ -235,7 +235,7 @@ async function getContainingScene(obs: OBSWebSocket): Promise<{
       }
     }
   }
-  throw new Error('Could not scene containing browser source');
+  throw new Error('Could not find scene containing browser source');
 }
 
 async function getContainingSource(obs: OBSWebSocket): Promise<{
